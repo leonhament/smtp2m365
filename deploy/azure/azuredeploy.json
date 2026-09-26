@@ -1,0 +1,406 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.47.16.16243",
+      "templateHash": "723398700125332525"
+    }
+  },
+  "parameters": {
+    "hostname": {
+      "type": "string",
+      "metadata": {
+        "description": "Public DNS name of the gateway, e.g. smtp.contoso.com. Must be inside dnsZoneName."
+      }
+    },
+    "dnsZoneName": {
+      "type": "string",
+      "metadata": {
+        "description": "Existing Azure DNS zone that hostname belongs to, e.g. contoso.com."
+      }
+    },
+    "dnsZoneResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource group of the Azure DNS zone (same subscription)."
+      }
+    },
+    "acmeEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "Contact email for Let's Encrypt."
+      }
+    },
+    "acmeStaging": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Use the Let's Encrypt staging CA (untrusted certificates, generous rate limits)."
+      }
+    },
+    "allowedSourceAddresses": {
+      "type": "array",
+      "metadata": {
+        "description": "Client IPs/CIDRs allowed to connect. Enforced by the NSG and by the gateway."
+      }
+    },
+    "allowedSenders": {
+      "type": "array",
+      "metadata": {
+        "description": "Allowed sender patterns: exact address, \"@domain\" or \"*\"."
+      }
+    },
+    "deniedSenders": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Denied sender patterns. Deny wins over allow."
+      }
+    },
+    "smtpUsers": {
+      "type": "secureObject",
+      "defaultValue": {},
+      "metadata": {
+        "description": "SMTP AUTH users: [{ username, password_hash, allowed_senders? }]. Create hashes with `smtp2m365 hash-password`."
+      }
+    },
+    "exchangeMethod": {
+      "type": "string",
+      "defaultValue": "smtp",
+      "allowedValues": [
+        "smtp",
+        "graph"
+      ],
+      "metadata": {
+        "description": "smtp = SMTP client submission with XOAUTH2 (recommended); graph = Graph sendMail (4 MB limit)."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "ghcr.io/OWNER/smtp2m365:latest"
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "smtp2m365"
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_B2ats_v2"
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "azureuser"
+    },
+    "sshPublicKey": {
+      "type": "string",
+      "metadata": {
+        "description": "SSH public key for the admin user. SSH is not opened in the NSG; use Bastion, JIT or Run Command."
+      }
+    }
+  },
+  "variables": {
+    "users": "[coalesce(tryGet(parameters('smtpUsers'), 'users'), createArray())]",
+    "gatewayConfig": {
+      "hostname": "[parameters('hostname')]",
+      "listeners": [
+        {
+          "addr": ":465",
+          "mode": "implicit"
+        },
+        {
+          "addr": ":587",
+          "mode": "starttls"
+        }
+      ],
+      "tls": {
+        "mode": "acme",
+        "acme": {
+          "email": "[parameters('acmeEmail')]",
+          "staging": "[parameters('acmeStaging')]",
+          "challenge": "dns-azure",
+          "storage": "/data/certmagic",
+          "azure_dns": {
+            "subscription_id": "[subscription().subscriptionId]",
+            "resource_group": "[parameters('dnsZoneResourceGroup')]"
+          }
+        }
+      },
+      "exchange": {
+        "method": "[parameters('exchangeMethod')]"
+      },
+      "policy": {
+        "allowed_networks": "[parameters('allowedSourceAddresses')]",
+        "require_auth": "[not(empty(variables('users')))]",
+        "allowed_senders": "[parameters('allowedSenders')]",
+        "denied_senders": "[parameters('deniedSenders')]",
+        "check_header_from": true
+      },
+      "users": "[variables('users')]",
+      "admin": {
+        "addr": "127.0.0.1:8080"
+      }
+    },
+    "cloudInit": "#cloud-config\npackage_update: true\npackages:\n  - docker.io\nwrite_files:\n  - path: /etc/smtp2m365/config.yaml\n    permissions: '0600'\n    encoding: b64\n    content: {0}\n  - path: /etc/systemd/system/smtp2m365.service\n    content: |\n      [Unit]\n      Description=smtp2m365 gateway\n      After=docker.service network-online.target\n      Requires=docker.service\n      [Service]\n      Restart=always\n      RestartSec=10\n      ExecStartPre=-/usr/bin/docker rm -f smtp2m365\n      ExecStartPre=/usr/bin/docker pull {1}\n      ExecStart=/usr/bin/docker run --rm --name smtp2m365 --network host -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}\n      ExecStop=/usr/bin/docker stop smtp2m365\n      [Install]\n      WantedBy=multi-user.target\nruncmd:\n  - mkdir -p /var/lib/smtp2m365\n  - chown 65532:65532 /var/lib/smtp2m365 /etc/smtp2m365/config.yaml\n  - systemctl daemon-reload\n  - systemctl enable --now smtp2m365\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2024-05-01",
+      "name": "[format('{0}-nsg', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "allow-smtp-tls",
+            "properties": {
+              "priority": 100,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+              "sourceAddressPrefixes": "[parameters('allowedSourceAddresses')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRanges": [
+                "465",
+                "587"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2024-05-01",
+      "name": "[format('{0}-vnet', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "10.60.0.0/24"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "gateway",
+            "properties": {
+              "addressPrefix": "10.60.0.0/27",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', format('{0}-nsg', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2024-05-01",
+      "name": "[format('{0}-pip', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Static",
+        "publicIPAddressVersion": "IPv4"
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2024-05-01",
+      "name": "[format('{0}-nic', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[reference(resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix'))), '2024-05-01').subnets[0].id]"
+              },
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix')))]"
+              }
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Network/virtualNetworks', format('{0}-vnet', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-07-01",
+      "name": "[format('{0}-vm', parameters('namePrefix'))]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "osProfile": {
+          "computerName": "[parameters('namePrefix')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "customData": "[base64(format(variables('cloudInit'), base64(string(variables('gatewayConfig'))), parameters('containerImage')))]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": true,
+            "ssh": {
+              "publicKeys": [
+                {
+                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+                  "keyData": "[parameters('sshPublicKey')]"
+                }
+              ]
+            },
+            "patchSettings": {
+              "patchMode": "AutomaticByPlatform",
+              "assessmentMode": "AutomaticByPlatform"
+            }
+          }
+        },
+        "storageProfile": {
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "ubuntu-24_04-lts",
+            "sku": "server",
+            "version": "latest"
+          },
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('namePrefix')))]"
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', parameters('namePrefix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('{0}-dns', parameters('namePrefix'))]",
+      "resourceGroup": "[parameters('dnsZoneResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "dnsZoneName": {
+            "value": "[parameters('dnsZoneName')]"
+          },
+          "recordName": {
+            "value": "[replace(parameters('hostname'), format('.{0}', parameters('dnsZoneName')), '')]"
+          },
+          "ipAddress": {
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix'))), '2024-05-01').ipAddress]"
+          },
+          "principalId": {
+            "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', format('{0}-vm', parameters('namePrefix'))), '2024-07-01', 'full').identity.principalId]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.47.16.16243",
+              "templateHash": "1957051464070536417"
+            }
+          },
+          "parameters": {
+            "dnsZoneName": {
+              "type": "string"
+            },
+            "recordName": {
+              "type": "string"
+            },
+            "ipAddress": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "dnsZoneContributor": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'befefa01-2a29-4197-83a8-272ff33ce314')]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Network/dnsZones/A",
+              "apiVersion": "2018-05-01",
+              "name": "[format('{0}/{1}', parameters('dnsZoneName'), parameters('recordName'))]",
+              "properties": {
+                "TTL": 300,
+                "ARecords": [
+                  {
+                    "ipv4Address": "[parameters('ipAddress')]"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName'))]",
+              "name": "[guid(resourceId('Microsoft.Network/dnsZones', parameters('dnsZoneName')), parameters('principalId'), variables('dnsZoneContributor'))]",
+              "properties": {
+                "roleDefinitionId": "[variables('dnsZoneContributor')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix')))]",
+        "[resourceId('Microsoft.Compute/virtualMachines', format('{0}-vm', parameters('namePrefix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "publicIpAddress": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix'))), '2024-05-01').ipAddress]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', format('{0}-vm', parameters('namePrefix'))), '2024-07-01', 'full').identity.principalId]"
+    },
+    "nextStep": {
+      "type": "string",
+      "value": "[format('Run scripts/Setup-ExchangeRbac.ps1 -ServicePrincipalObjectId {0} to let the gateway send through Exchange Online.', reference(resourceId('Microsoft.Compute/virtualMachines', format('{0}-vm', parameters('namePrefix'))), '2024-07-01', 'full').identity.principalId)]"
+    }
+  }
+}

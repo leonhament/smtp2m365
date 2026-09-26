@@ -1,0 +1,6 @@
+/smtp2m365
+/dist/
+config.yaml
+*.pem
+*.key
+*.crt

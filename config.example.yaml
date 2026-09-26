@@ -1,0 +1,70 @@
+# smtp2m365 configuration. ${VAR} is replaced with the environment variable VAR.
+
+# Public DNS name of the gateway (SMTP greeting + TLS certificate name).
+hostname: smtp.contoso.com
+
+# Only TLS is offered. "implicit" = TLS from the first byte (SMTPS),
+# "starttls" = STARTTLS is required before AUTH or MAIL.
+listeners:
+  - addr: ":465"
+    mode: implicit
+  - addr: ":587"
+    mode: starttls
+
+tls:
+  mode: acme              # acme | files
+  acme:
+    email: postmaster@contoso.com
+    staging: false        # set true while testing to avoid Let's Encrypt rate limits
+    challenge: dns-azure  # dns-azure (no inbound port 80) | http-01
+    storage: /data/certmagic   # must be persistent
+    azure_dns:
+      subscription_id: 00000000-0000-0000-0000-000000000000
+      resource_group: rg-dns
+  # mode: files
+  # cert_file: /etc/smtp2m365/tls.crt
+  # key_file: /etc/smtp2m365/tls.key
+
+exchange:
+  # smtp  = SMTP client submission + XOAUTH2 (RBAC role "Application SMTP.SendAsApp").
+  #         Passes the message through unchanged; up to 35 MB. Recommended.
+  # graph = Graph sendMail with MIME (RBAC role "Application Mail.Send"). 4 MB limit.
+  method: smtp
+  timeout: 2m
+  # For national clouds, override these:
+  # smtp_host: smtp.office365.us:587
+  # graph_endpoint: https://graph.microsoft.us
+  # token_scope: https://outlook.office365.us/.default
+
+policy:
+  # Client IPs/CIDRs that may connect. Everything else is dropped. Empty = nobody.
+  allowed_networks:
+    - 198.51.100.0/24
+  require_auth: true
+  # Sender addresses (envelope, and From: header when check_header_from is on).
+  # Exact address, "@domain", or "*". Deny wins over allow.
+  allowed_senders:
+    - "@contoso.com"
+  denied_senders:
+    - ceo@contoso.com
+  check_header_from: true
+  max_auth_failures: 10
+  auth_failure_window: 15m
+
+# Generate hashes with: smtp2m365 hash-password
+users:
+  - username: printer-floor2
+    password_hash: ${PRINTER_FLOOR2_HASH}
+    allowed_senders:          # optional, narrows the global list for this user
+      - scanner@contoso.com
+
+limits:
+  max_message_bytes: 36700160   # 35 MB, the Exchange Online default
+  max_recipients: 100
+
+admin:
+  addr: 127.0.0.1:8080   # /healthz, /api/stats, /api/events
+  token: ${ADMIN_TOKEN}
+
+reporting:
+  recent_events: 1000
