@@ -48,6 +48,10 @@ param adminUsername string = 'azureuser'
 @description('SSH public key for the admin user. SSH is not opened in the NSG; use Bastion, JIT or Run Command.')
 param sshPublicKey string
 
+@description('Bearer token for the admin API (/api/stats, /api/events), reachable on the VM at http://127.0.0.1:8080.')
+@secure()
+param adminToken string = newGuid()
+
 var users = smtpUsers.?users ?? []
 
 var hostInZone = hostname == dnsZoneName || endsWith(hostname, '.${dnsZoneName}')
@@ -85,7 +89,8 @@ var gatewayConfig = {
     check_header_from: true
   }
   users: users
-  admin: { addr: '127.0.0.1:8080' }
+  // Inside the container; published only on the VM's loopback interface.
+  admin: { addr: ':8080', token: adminToken }
 }
 
 // JSON is valid YAML, so the config object is written as-is.
@@ -110,7 +115,7 @@ write_files:
       RestartSec=10
       ExecStartPre=-/usr/bin/docker rm -f smtp2m365
       ExecStartPre=/usr/bin/docker pull {1}
-      ExecStart=/usr/bin/docker run --rm --name smtp2m365 --network host -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}
+      ExecStart=/usr/bin/docker run --rm --name smtp2m365 -p 465:465 -p 587:587 -p 127.0.0.1:8080:8080 -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}
       ExecStop=/usr/bin/docker stop smtp2m365
       [Install]
       WantedBy=multi-user.target
