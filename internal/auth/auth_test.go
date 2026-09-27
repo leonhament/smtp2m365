@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/config"
 )
 
 func TestAuthenticate(t *testing.T) {

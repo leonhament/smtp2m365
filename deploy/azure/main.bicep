@@ -35,7 +35,7 @@ param smtpUsers object = {}
 @description('smtp = SMTP client submission with XOAUTH2 (recommended); graph = Graph sendMail (4 MB limit).')
 param exchangeMethod string = 'smtp'
 
-param containerImage string = 'ghcr.io/OWNER/smtp2m365:latest'
+param containerImage string = 'ghcr.io/leonhament/smtp2m365:latest'
 
 param namePrefix string = 'smtp2m365'
 param location string = resourceGroup().location

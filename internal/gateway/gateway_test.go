@@ -22,11 +22,11 @@ import (
 	"github.com/emersion/go-smtp"
 	"golang.org/x/crypto/bcrypt"
 
-	"smtp2m365/internal/auth"
-	"smtp2m365/internal/config"
-	"smtp2m365/internal/exchange"
-	"smtp2m365/internal/policy"
-	"smtp2m365/internal/report"
+	"github.com/leonhament/smtp2m365/internal/auth"
+	"github.com/leonhament/smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/exchange"
+	"github.com/leonhament/smtp2m365/internal/policy"
+	"github.com/leonhament/smtp2m365/internal/report"
 )
 
 type sent struct {

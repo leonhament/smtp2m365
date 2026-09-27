@@ -19,13 +19,13 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"golang.org/x/term"
 
-	"smtp2m365/internal/auth"
-	"smtp2m365/internal/config"
-	"smtp2m365/internal/exchange"
-	"smtp2m365/internal/gateway"
-	"smtp2m365/internal/policy"
-	"smtp2m365/internal/report"
-	"smtp2m365/internal/tlsconf"
+	"github.com/leonhament/smtp2m365/internal/auth"
+	"github.com/leonhament/smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/exchange"
+	"github.com/leonhament/smtp2m365/internal/gateway"
+	"github.com/leonhament/smtp2m365/internal/policy"
+	"github.com/leonhament/smtp2m365/internal/report"
+	"github.com/leonhament/smtp2m365/internal/tlsconf"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".

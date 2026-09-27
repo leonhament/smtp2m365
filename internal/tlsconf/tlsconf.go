@@ -13,7 +13,7 @@ import (
 	"github.com/caddyserver/certmagic"
 	"github.com/libdns/azure"
 
-	"smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/config"
 )
 
 func Load(ctx context.Context, hostname string, cfg config.TLS) (*tls.Config, error) {

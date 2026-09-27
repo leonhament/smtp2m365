@@ -35,7 +35,7 @@ Prerequisites:
 
 ### 1. Deploy the infrastructure
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FOWNER%2Fsmtp2m365%2Fmain%2Fdeploy%2Fazure%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fleonhament%2Fsmtp2m365%2Fmain%2Fdeploy%2Fazure%2Fazuredeploy.json)
 
 Or with the CLI:
 
@@ -60,7 +60,7 @@ The template creates:
 Create password hashes with:
 
 ```sh
-docker run --rm -it ghcr.io/OWNER/smtp2m365 hash-password
+docker run --rm -it ghcr.io/leonhament/smtp2m365 hash-password
 ```
 
 ### 2. Grant the gateway access in Exchange Online

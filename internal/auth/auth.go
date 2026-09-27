@@ -10,8 +10,8 @@ import (
 	"github.com/emersion/go-sasl"
 	"golang.org/x/crypto/bcrypt"
 
-	"smtp2m365/internal/config"
-	"smtp2m365/internal/policy"
+	"github.com/leonhament/smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/policy"
 )
 
 var ErrInvalidCredentials = errors.New("invalid credentials")

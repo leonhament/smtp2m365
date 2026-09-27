@@ -16,10 +16,10 @@ import (
 	"github.com/emersion/go-sasl"
 	"github.com/emersion/go-smtp"
 
-	"smtp2m365/internal/auth"
-	"smtp2m365/internal/exchange"
-	"smtp2m365/internal/policy"
-	"smtp2m365/internal/report"
+	"github.com/leonhament/smtp2m365/internal/auth"
+	"github.com/leonhament/smtp2m365/internal/exchange"
+	"github.com/leonhament/smtp2m365/internal/policy"
+	"github.com/leonhament/smtp2m365/internal/report"
 )
 
 var (

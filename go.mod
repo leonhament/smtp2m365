@@ -1,4 +1,4 @@
-module smtp2m365
+module github.com/leonhament/smtp2m365
 
 go 1.27.1
 

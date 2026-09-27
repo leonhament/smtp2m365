@@ -15,7 +15,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 
-	"smtp2m365/internal/config"
+	"github.com/leonhament/smtp2m365/internal/config"
 )
 
 // Sender submits a raw RFC 5322 message on behalf of mailbox.

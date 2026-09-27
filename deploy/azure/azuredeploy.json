@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "723398700125332525"
+      "templateHash": "2914838337418354711"
     }
   },
   "parameters": {
@@ -63,7 +63,7 @@
       "type": "secureObject",
       "defaultValue": {},
       "metadata": {
-        "description": "SMTP AUTH users: [{ username, password_hash, allowed_senders? }]. Create hashes with `smtp2m365 hash-password`."
+        "description": "SMTP AUTH users as { users: [{ username, password_hash, allowed_senders? }] }. Create hashes with `smtp2m365 hash-password`. Without users the gateway relies on the IP allowlist alone."
       }
     },
     "exchangeMethod": {
@@ -79,7 +79,7 @@
     },
     "containerImage": {
       "type": "string",
-      "defaultValue": "ghcr.io/OWNER/smtp2m365:latest"
+      "defaultValue": "ghcr.io/leonhament/smtp2m365:latest"
     },
     "namePrefix": {
       "type": "string",
