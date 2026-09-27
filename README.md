@@ -30,7 +30,7 @@ printer / app ──TLS 465/587──▶ smtp2m365 ──OAuth (managed identity
 
 Prerequisites:
 
-- An Azure DNS zone for the gateway's hostname (for example `contoso.com` for `smtp.contoso.com`).
+- An Azure DNS zone. It does not have to contain the gateway's hostname (see [Hostname outside Azure DNS](#hostname-outside-azure-dns)).
 - A mail-enabled security group containing the mailboxes the gateway may send as (for example `smtp2m365-senders@contoso.com`).
 
 ### 1. Deploy the infrastructure
@@ -62,6 +62,17 @@ Create password hashes with:
 ```sh
 docker run --rm -it ghcr.io/leonhament/smtp2m365 hash-password
 ```
+
+#### Hostname outside Azure DNS
+
+If the hostname's zone is hosted elsewhere (for example `smtp.contoso.com` at TransIP or Cloudflare), point `dnsZoneName` at any Azure DNS zone you have. The template then creates `azureRecordName` (default `smtp2m365`) in that zone, and the `dnsRecordsToCreate` output lists two records to add at your DNS provider:
+
+```
+smtp.contoso.com                  CNAME  smtp2m365.bytecloud.nl
+_acme-challenge.smtp.contoso.com  CNAME  _acme-challenge.smtp2m365.bytecloud.nl
+```
+
+The second record delegates the Let's Encrypt challenge, so certificates keep renewing without API access to your DNS provider. The gateway checks that the record exists before it asks Let's Encrypt for a certificate. Until then it logs exactly which record is missing and retries. In a hand-written config, this is `tls.acme.challenge_alias`.
 
 ### 2. Grant the gateway access in Exchange Online
 

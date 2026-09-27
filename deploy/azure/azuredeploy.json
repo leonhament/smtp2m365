@@ -5,20 +5,27 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "2914838337418354711"
+      "templateHash": "13665699795766365952"
     }
   },
   "parameters": {
     "hostname": {
       "type": "string",
       "metadata": {
-        "description": "Public DNS name of the gateway, e.g. smtp.contoso.com. Must be inside dnsZoneName."
+        "description": "Public DNS name devices connect to, e.g. smtp.contoso.com. It may be outside dnsZoneName; see azureRecordName."
       }
     },
     "dnsZoneName": {
       "type": "string",
       "metadata": {
-        "description": "Existing Azure DNS zone that hostname belongs to, e.g. contoso.com."
+        "description": "Existing Azure DNS zone used for the gateway's DNS record and Let's Encrypt challenges, e.g. contoso.com."
+      }
+    },
+    "azureRecordName": {
+      "type": "string",
+      "defaultValue": "smtp2m365",
+      "metadata": {
+        "description": "Only used when hostname is not inside dnsZoneName: the record created in dnsZoneName. You then add two CNAMEs at the DNS provider of hostname (see the dnsRecordsToCreate output)."
       }
     },
     "dnsZoneResourceGroup": {
@@ -106,6 +113,10 @@
   },
   "variables": {
     "users": "[coalesce(tryGet(parameters('smtpUsers'), 'users'), createArray())]",
+    "hostInZone": "[or(equals(parameters('hostname'), parameters('dnsZoneName')), endsWith(parameters('hostname'), format('.{0}', parameters('dnsZoneName'))))]",
+    "recordName": "[if(not(variables('hostInZone')), parameters('azureRecordName'), if(equals(parameters('hostname'), parameters('dnsZoneName')), '@', substring(parameters('hostname'), 0, sub(sub(length(parameters('hostname')), length(parameters('dnsZoneName'))), 1))))]",
+    "azureHostname": "[if(variables('hostInZone'), parameters('hostname'), format('{0}.{1}', parameters('azureRecordName'), parameters('dnsZoneName')))]",
+    "challengeAlias": "[if(variables('hostInZone'), '', format('_acme-challenge.{0}', variables('azureHostname')))]",
     "gatewayConfig": {
       "hostname": "[parameters('hostname')]",
       "listeners": [
@@ -124,6 +135,7 @@
           "email": "[parameters('acmeEmail')]",
           "staging": "[parameters('acmeStaging')]",
           "challenge": "dns-azure",
+          "challenge_alias": "[variables('challengeAlias')]",
           "storage": "/data/certmagic",
           "azure_dns": {
             "subscription_id": "[subscription().subscriptionId]",
@@ -319,7 +331,7 @@
             "value": "[parameters('dnsZoneName')]"
           },
           "recordName": {
-            "value": "[replace(parameters('hostname'), format('.{0}', parameters('dnsZoneName')), '')]"
+            "value": "[variables('recordName')]"
           },
           "ipAddress": {
             "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', format('{0}-pip', parameters('namePrefix'))), '2024-05-01').ipAddress]"
@@ -397,6 +409,10 @@
     "managedIdentityPrincipalId": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Compute/virtualMachines', format('{0}-vm', parameters('namePrefix'))), '2024-07-01', 'full').identity.principalId]"
+    },
+    "dnsRecordsToCreate": {
+      "type": "string",
+      "value": "[if(variables('hostInZone'), 'None, the record was created in Azure DNS.', format('At the DNS provider of {0}: \"{1} CNAME {2}\" and \"_acme-challenge.{3} CNAME {4}\". The gateway waits for them before requesting a certificate.', parameters('hostname'), parameters('hostname'), variables('azureHostname'), parameters('hostname'), variables('challengeAlias')))]"
     },
     "nextStep": {
       "type": "string",

@@ -3,11 +3,14 @@
 // Let's Encrypt DNS-01 against Azure DNS and, after running
 // scripts/Setup-ExchangeRbac.ps1, for sending through Exchange Online.
 
-@description('Public DNS name of the gateway, e.g. smtp.contoso.com. Must be inside dnsZoneName.')
+@description('Public DNS name devices connect to, e.g. smtp.contoso.com. It may be outside dnsZoneName; see azureRecordName.')
 param hostname string
 
-@description('Existing Azure DNS zone that hostname belongs to, e.g. contoso.com.')
+@description('Existing Azure DNS zone used for the gateway\'s DNS record and Let\'s Encrypt challenges, e.g. contoso.com.')
 param dnsZoneName string
+
+@description('Only used when hostname is not inside dnsZoneName: the record created in dnsZoneName. You then add two CNAMEs at the DNS provider of hostname (see the dnsRecordsToCreate output).')
+param azureRecordName string = 'smtp2m365'
 
 @description('Resource group of the Azure DNS zone (same subscription).')
 param dnsZoneResourceGroup string
@@ -47,6 +50,12 @@ param sshPublicKey string
 
 var users = smtpUsers.?users ?? []
 
+var hostInZone = hostname == dnsZoneName || endsWith(hostname, '.${dnsZoneName}')
+var recordName = !hostInZone ? azureRecordName : hostname == dnsZoneName ? '@' : substring(hostname, 0, length(hostname) - length(dnsZoneName) - 1)
+var azureHostname = hostInZone ? hostname : '${azureRecordName}.${dnsZoneName}'
+// Hostnames outside the Azure zone delegate the ACME challenge with a CNAME.
+var challengeAlias = hostInZone ? '' : '_acme-challenge.${azureHostname}'
+
 var gatewayConfig = {
   hostname: hostname
   listeners: [
@@ -59,6 +68,7 @@ var gatewayConfig = {
       email: acmeEmail
       staging: acmeStaging
       challenge: 'dns-azure'
+      challenge_alias: challengeAlias
       storage: '/data/certmagic'
       azure_dns: {
         subscription_id: subscription().subscriptionId
@@ -224,7 +234,7 @@ module dns 'dns.bicep' = {
   scope: resourceGroup(dnsZoneResourceGroup)
   params: {
     dnsZoneName: dnsZoneName
-    recordName: replace(hostname, '.${dnsZoneName}', '')
+    recordName: recordName
     ipAddress: pip.properties.ipAddress
     principalId: vm.identity.principalId
   }
@@ -232,4 +242,5 @@ module dns 'dns.bicep' = {
 
 output publicIpAddress string = pip.properties.ipAddress
 output managedIdentityPrincipalId string = vm.identity.principalId
+output dnsRecordsToCreate string = hostInZone ? 'None, the record was created in Azure DNS.' : 'At the DNS provider of ${hostname}: "${hostname} CNAME ${azureHostname}" and "_acme-challenge.${hostname} CNAME ${challengeAlias}". The gateway waits for them before requesting a certificate.'
 output nextStep string = 'Run scripts/Setup-ExchangeRbac.ps1 -ServicePrincipalObjectId ${vm.identity.principalId} to let the gateway send through Exchange Online.'

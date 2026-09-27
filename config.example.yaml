@@ -17,6 +17,11 @@ tls:
     email: postmaster@contoso.com
     staging: false        # set true while testing to avoid Let's Encrypt rate limits
     challenge: dns-azure  # dns-azure (no inbound port 80) | http-01
+    # Hostname in a zone that is NOT in Azure DNS (e.g. at TransIP)? Delegate the
+    # challenge to a name in your Azure DNS zone and add one permanent record at
+    # the hostname's DNS provider:
+    #   _acme-challenge.smtp.contoso.com  CNAME  _acme-challenge.smtp2m365.bytecloud.nl
+    # challenge_alias: _acme-challenge.smtp2m365.bytecloud.nl
     storage: /data/certmagic   # must be persistent
     azure_dns:
       subscription_id: 00000000-0000-0000-0000-000000000000

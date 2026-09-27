@@ -58,9 +58,14 @@ type ACME struct {
 	Email   string `yaml:"email"`
 	Staging bool   `yaml:"staging"`
 	// Challenge is "dns-azure" (recommended, no inbound port 80 needed) or "http-01".
-	Challenge string   `yaml:"challenge"`
-	Storage   string   `yaml:"storage"`
-	AzureDNS  AzureDNS `yaml:"azure_dns"`
+	Challenge string `yaml:"challenge"`
+	// ChallengeAlias delegates the DNS-01 challenge to a name in Azure DNS,
+	// for hostnames whose zone is hosted elsewhere. The hostname's zone
+	// needs one permanent record:
+	//   _acme-challenge.<hostname>  CNAME  <ChallengeAlias>
+	ChallengeAlias string   `yaml:"challenge_alias"`
+	Storage        string   `yaml:"storage"`
+	AzureDNS       AzureDNS `yaml:"azure_dns"`
 }
 
 type AzureDNS struct {
@@ -208,7 +213,13 @@ func (c *Config) validate() error {
 			if c.TLS.ACME.AzureDNS.SubscriptionID == "" || c.TLS.ACME.AzureDNS.ResourceGroup == "" {
 				fail("tls.acme.azure_dns.subscription_id and resource_group are required for dns-azure")
 			}
+			if a := c.TLS.ACME.ChallengeAlias; a != "" && !strings.HasPrefix(strings.ToLower(a), "_acme-challenge.") {
+				fail("tls.acme.challenge_alias must start with _acme-challenge. (got %q)", a)
+			}
 		case ChallengeHTTP01:
+			if c.TLS.ACME.ChallengeAlias != "" {
+				fail("tls.acme.challenge_alias only applies to the dns-azure challenge")
+			}
 		default:
 			fail("tls.acme.challenge must be %q or %q", ChallengeDNSAzure, ChallengeHTTP01)
 		}

@@ -62,6 +62,14 @@ users: [{username: u, password_hash: hunter2}]`,
 hostname: x
 tls: {mode: files, cert_file: a, key_file: b}
 policy: {allowed_senders: ["*"], require_auth: false, alowed_networks: []}`,
+		"challenge alias without _acme-challenge prefix": `
+hostname: x
+tls: {mode: acme, acme: {email: a@b.c, challenge: dns-azure, challenge_alias: smtp2m365.bytecloud.nl, azure_dns: {subscription_id: s, resource_group: r}}}
+policy: {allowed_senders: ["*"], require_auth: false}`,
+		"challenge alias with http-01": `
+hostname: x
+tls: {mode: acme, acme: {email: a@b.c, challenge: http-01, challenge_alias: _acme-challenge.x.y}}
+policy: {allowed_senders: ["*"], require_auth: false}`,
 		"public admin without token": `
 hostname: x
 tls: {mode: files, cert_file: a, key_file: b}

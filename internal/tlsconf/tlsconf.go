@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -59,12 +60,19 @@ func acme(ctx context.Context, hostname string, cfg config.ACME) (*tls.Config, e
 		// Authenticates with the managed identity; it needs the
 		// "DNS Zone Contributor" role on the zone.
 		issuer.DisableHTTPChallenge = true
-		issuer.DNS01Solver = &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
+		solver := &certmagic.DNS01Solver{DNSManager: certmagic.DNSManager{
 			DNSProvider: &azure.Provider{
 				SubscriptionId:    cfg.AzureDNS.SubscriptionID,
 				ResourceGroupName: cfg.AzureDNS.ResourceGroup,
 			},
 		}}
+		if cfg.ChallengeAlias != "" {
+			if err := checkDelegation(ctx, hostname, cfg.ChallengeAlias, lookupCNAME); err != nil {
+				return nil, err
+			}
+			solver.OverrideDomain = strings.TrimSuffix(cfg.ChallengeAlias, ".")
+		}
+		issuer.DNS01Solver = solver
 	case config.ChallengeHTTP01:
 		// certmagic binds :80 itself while solving the challenge.
 	}
