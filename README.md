@@ -114,6 +114,32 @@ Credentials come from [`DefaultAzureCredential`](https://learn.microsoft.com/azu
 - **In Azure:** the managed identity.
 - **Elsewhere, or to send into a different tenant:** set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and either `AZURE_CLIENT_SECRET` or `AZURE_CLIENT_CERTIFICATE_PATH`. Then run the RBAC script with that app registration's IDs.
 
+### Changing a deployed gateway
+
+Redeploying the template does not change a running VM's configuration. Use `scripts/Update-GatewayConfig.ps1` instead. It needs PowerShell 7 and the Azure CLI.
+
+```powershell
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -Show
+
+# Your office IP changed
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -AddAllowedNetwork 203.0.113.7 -RemoveAllowedNetwork 198.51.100.10
+
+# Senders, users (a random password is generated and shown once), certificates, upgrades
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -AddDeniedSender ceo@contoso.com
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -AddUser printer-floor3 -UserAllowedSender scanner@contoso.com
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -ResetPassword printer-floor3
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -AcmeCA Production
+./scripts/Update-GatewayConfig.ps1 -ResourceGroup rg-smtp2m365 -ImageTag 0.3.0
+```
+
+Every change is safe to retry:
+
+- The new config is first validated by the gateway itself (`smtp2m365 check-config`), using the target image.
+- If the gateway does not come back up after the restart, the previous config and image are restored automatically.
+- The NSG rule is then set to exactly `policy.allowed_networks`, so the firewall and the gateway allowlist cannot drift apart.
+
+Add `-WhatIf` to preview a change without applying it.
+
 ## Reporting
 
 - **Logs.** Each message produces one JSON line on stdout with `"msg":"smtp event"`. On the VM, view them with `journalctl -u smtp2m365` or `docker logs smtp2m365`.

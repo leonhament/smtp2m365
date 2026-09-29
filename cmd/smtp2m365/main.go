@@ -43,11 +43,26 @@ func main() {
 		case "version":
 			fmt.Println(version)
 			return
+		case "check-config":
+			fs := flag.NewFlagSet("check-config", flag.ExitOnError)
+			configPath := fs.String("config", "/etc/smtp2m365/config.yaml", "path to the configuration file")
+			fs.Parse(os.Args[2:])
+			if _, _, _, err := load(*configPath); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			// scripts/Update-GatewayConfig.ps1 looks for this exact line.
+			fmt.Println("config OK")
+			return
 		}
 	}
 
 	configPath := flag.String("config", "/etc/smtp2m365/config.yaml", "path to the configuration file")
 	flag.Parse()
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "unknown command %q (commands: check-config, hash-password, version)\n", flag.Arg(0))
+		os.Exit(2)
+	}
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -59,21 +74,31 @@ func main() {
 	}
 }
 
-func run(ctx context.Context, configPath string, log *slog.Logger) error {
+// load reads the config and compiles everything derived from it, so that
+// check-config catches the same errors as a real start.
+func load(configPath string) (*config.Config, *policy.Policy, *auth.Store, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return err
+		return nil, nil, nil, err
 	}
 	pol, err := policy.New(cfg.Policy.AllowedNetworks, cfg.Policy.AllowedSenders, cfg.Policy.DeniedSenders)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	users, err := auth.NewStore(cfg.Users)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cfg, pol, users, nil
+}
+
+func run(ctx context.Context, configPath string, log *slog.Logger) error {
+	cfg, pol, users, err := load(configPath)
 	if err != nil {
 		return err
 	}
 	if len(cfg.Policy.AllowedNetworks) == 0 {
 		log.Warn("policy.allowed_networks is empty; every connection will be refused")
-	}
-	users, err := auth.NewStore(cfg.Users)
-	if err != nil {
-		return err
 	}
 
 	// Managed identity in Azure; AZURE_TENANT_ID/AZURE_CLIENT_ID/

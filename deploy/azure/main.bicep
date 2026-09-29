@@ -114,7 +114,8 @@ write_files:
       Restart=always
       RestartSec=10
       ExecStartPre=-/usr/bin/docker rm -f smtp2m365
-      ExecStartPre=/usr/bin/docker pull {1}
+      # A registry outage must not stop a restart when the image is cached.
+      ExecStartPre=-/usr/bin/docker pull {1}
       ExecStart=/usr/bin/docker run --rm --name smtp2m365 -p 465:465 -p 587:587 -p 127.0.0.1:8080:8080 -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}
       ExecStop=/usr/bin/docker stop smtp2m365
       [Install]

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "4569612580855343183"
+      "templateHash": "8101075857486716647"
     }
   },
   "parameters": {
@@ -166,7 +166,7 @@
         "token": "[parameters('adminToken')]"
       }
     },
-    "cloudInit": "#cloud-config\npackage_update: true\npackages:\n  - docker.io\nwrite_files:\n  - path: /etc/smtp2m365/config.yaml\n    permissions: '0600'\n    encoding: b64\n    content: {0}\n  - path: /etc/systemd/system/smtp2m365.service\n    content: |\n      [Unit]\n      Description=smtp2m365 gateway\n      After=docker.service network-online.target\n      Requires=docker.service\n      [Service]\n      Restart=always\n      RestartSec=10\n      ExecStartPre=-/usr/bin/docker rm -f smtp2m365\n      ExecStartPre=/usr/bin/docker pull {1}\n      ExecStart=/usr/bin/docker run --rm --name smtp2m365 -p 465:465 -p 587:587 -p 127.0.0.1:8080:8080 -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}\n      ExecStop=/usr/bin/docker stop smtp2m365\n      [Install]\n      WantedBy=multi-user.target\nruncmd:\n  - mkdir -p /var/lib/smtp2m365\n  - chown 65532:65532 /var/lib/smtp2m365 /etc/smtp2m365/config.yaml\n  - systemctl daemon-reload\n  - systemctl enable --now smtp2m365\n"
+    "cloudInit": "#cloud-config\npackage_update: true\npackages:\n  - docker.io\nwrite_files:\n  - path: /etc/smtp2m365/config.yaml\n    permissions: '0600'\n    encoding: b64\n    content: {0}\n  - path: /etc/systemd/system/smtp2m365.service\n    content: |\n      [Unit]\n      Description=smtp2m365 gateway\n      After=docker.service network-online.target\n      Requires=docker.service\n      [Service]\n      Restart=always\n      RestartSec=10\n      ExecStartPre=-/usr/bin/docker rm -f smtp2m365\n      # A registry outage must not stop a restart when the image is cached.\n      ExecStartPre=-/usr/bin/docker pull {1}\n      ExecStart=/usr/bin/docker run --rm --name smtp2m365 -p 465:465 -p 587:587 -p 127.0.0.1:8080:8080 -v /etc/smtp2m365:/etc/smtp2m365:ro -v /var/lib/smtp2m365:/data {1}\n      ExecStop=/usr/bin/docker stop smtp2m365\n      [Install]\n      WantedBy=multi-user.target\nruncmd:\n  - mkdir -p /var/lib/smtp2m365\n  - chown 65532:65532 /var/lib/smtp2m365 /etc/smtp2m365/config.yaml\n  - systemctl daemon-reload\n  - systemctl enable --now smtp2m365\n"
   },
   "resources": [
     {
