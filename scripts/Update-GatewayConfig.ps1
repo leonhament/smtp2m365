@@ -124,9 +124,10 @@ function New-Password {
 }
 
 function Get-NsgPrefixes {
-    $rule = az network nsg rule show -g $ResourceGroup --nsg-name $NsgName -n $NsgRuleName -o json --only-show-errors | ConvertFrom-Json
+    $rule = az network nsg rule show -g $ResourceGroup --nsg-name $NsgName -n $NsgRuleName -o json --only-show-errors | ConvertFrom-Json -AsHashtable
     if ($LASTEXITCODE -ne 0) { throw "Cannot read NSG rule $NsgName/$NsgRuleName" }
-    @(@($rule.sourceAddressPrefix) + @($rule.sourceAddressPrefixes) | Where-Object { $_ })
+    # Azure returns either sourceAddressPrefix (one entry) or sourceAddressPrefixes.
+    @(@($rule['sourceAddressPrefix']) + @($rule['sourceAddressPrefixes']) | Where-Object { $_ })
 }
 
 function Write-Summary($Config, [string] $Image) {
